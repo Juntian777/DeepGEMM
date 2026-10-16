@@ -260,7 +260,13 @@ static void fp8_bmm(const torch::stable::Tensor& a, const torch::stable::Tensor&
         //    nor a packed 4-SF word may cross a batch boundary
         DG_HOST_ASSERT(jit->device.get_arch_major() == 10);
         DG_HOST_ASSERT(d_tensor.stride(0) == n and n % 128 == 0);
-        check_sf_layout(sfd.value(), m, batch_size * n, 1, 32, std::nullopt, true, false, torch::headeronly::ScalarType::Int);
+        if (sfd->dim() == 3) {
+            // The 128x4 tiled layout: rows past `m` in the last tile are left unwritten
+            DG_HOST_ASSERT(sfd->scalar_type() == torch::headeronly::ScalarType::Int and sfd->is_contiguous());
+            DG_HOST_ASSERT(sfd->size(0) == ceil_div(m, 128) and sfd->size(1) == batch_size * n / 128 and sfd->size(2) == 128);
+        } else {
+            check_sf_layout(sfd.value(), m, batch_size * n, 1, 32, std::nullopt, true, false, torch::headeronly::ScalarType::Int);
+        }
     }
 
     // Early return for trivial cases
